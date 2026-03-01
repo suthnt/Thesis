@@ -1,0 +1,19 @@
+# Data & models
+*.keras
+*.h5
+*.pth
+*.pkl
+OrganizedDataset*/
+ChippedImages*/
+balanced_multiclass_1year/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Outputs
+*.out
+*.err
+slurm-*.out
