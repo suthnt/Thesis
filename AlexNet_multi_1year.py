@@ -1,8 +1,4 @@
-"""
-AlexNet Multi-Class - 1-YEAR DATA
-Classes: 0_safe, 1_crash, 2_crashes, 3plus_crashes
-Handles severe imbalance (~84% safe) with aggressive class weights + lower dropout.
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 from keras.layers import Conv2D, MaxPooling2D, Dense, Flatten, Dropout, BatchNormalization

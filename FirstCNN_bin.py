@@ -1,20 +1,35 @@
-"""FirstCNN - Binary Classification (Safe vs Dangerous)"""
+# This code was written with the assistance of Claude (Anthropic).
 
-import tensorflow as tf
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout, BatchNormalization
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from sklearn.utils.class_weight import compute_class_weight
-from sklearn.metrics import classification_report, confusion_matrix
+import argparse
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+import tensorflow as tf
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import BatchNormalization, Conv2D, Dense, Dropout, Flatten, MaxPooling2D
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 # === CONFIGURATION ===
+BASE = "/scratch/gpfs/ALAINK/Suthi"
+parser = argparse.ArgumentParser()
+parser.add_argument("--fold", type=int, default=None, help="K-fold index 0..4 (None = standard train/test)")
+args = parser.parse_args()
+
 MODEL_TAG = "FirstCNN_bin"
-DATASET_DIR = "/scratch/gpfs/ALAINK/Suthi/OrganizedDatasetBalancedBinary"
+if args.fold is not None:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary_kfold/fold_{args.fold}"
+    OUTPUT_DIR = f"{BASE}/binary_1year_kfold/FirstCNN_bin_f{args.fold}"
+    VAL_SPLIT = "val"
+else:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary"
+    OUTPUT_DIR = BASE
+    VAL_SPLIT = "test"
+
 IMG_SIZE = 99
 BATCH_SIZE = 32
 NUM_CLASSES = 2
@@ -45,7 +60,7 @@ train_generator = train_datagen.flow_from_directory(
 )
 
 test_generator = test_datagen.flow_from_directory(
-    f"{DATASET_DIR}/test",
+    f"{DATASET_DIR}/{VAL_SPLIT}",
     target_size=(IMG_SIZE, IMG_SIZE),
     batch_size=BATCH_SIZE,
     class_mode='categorical',
@@ -108,7 +123,7 @@ callbacks = [
         verbose=1
     ),
     ModelCheckpoint(
-        f'best_{MODEL_TAG}.keras',
+        os.path.join(OUTPUT_DIR, f'best_{MODEL_TAG}.keras'),
         monitor='val_accuracy',
         save_best_only=True,
         verbose=1
@@ -127,6 +142,12 @@ history = model.fit(
 print("\n=== Final Evaluation ===")
 test_loss, test_acc = model.evaluate(test_generator)
 print(f"Test accuracy: {test_acc:.4f}")
+
+if args.fold is not None:
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    import json
+    with open(os.path.join(OUTPUT_DIR, "kfold_result.json"), "w") as f:
+        json.dump({"fold": args.fold, "val_accuracy": float(test_acc)}, f)
 
 # === PLOTS ===
 # Training history
@@ -147,7 +168,7 @@ axes[1].set_ylabel('Loss')
 axes[1].legend()
 
 plt.tight_layout()
-plt.savefig(f'training_history_{MODEL_TAG}.png', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(OUTPUT_DIR, f'training_history_{MODEL_TAG}.png'), dpi=300, bbox_inches='tight')
 print(f"Saved: training_history_{MODEL_TAG}.png")
 
 # Confusion Matrix
@@ -169,44 +190,41 @@ plt.title(f'{MODEL_TAG} - Confusion Matrix')
 plt.xlabel('Predicted')
 plt.ylabel('Actual')
 plt.tight_layout()
-plt.savefig(f'confusion_matrix_{MODEL_TAG}.png', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(OUTPUT_DIR, f'confusion_matrix_{MODEL_TAG}.png'), dpi=300, bbox_inches='tight')
 print(f"Saved: confusion_matrix_{MODEL_TAG}.png")
 
-# === SAMPLE PREDICTIONS ===
-OUTPUT_DIR = f'/scratch/gpfs/ALAINK/Suthi/samples_{MODEL_TAG}'
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-
-sample_gen = test_datagen.flow_from_directory(
-    f"{DATASET_DIR}/train",
-    target_size=(IMG_SIZE, IMG_SIZE),
-    batch_size=6,
-    class_mode='categorical',
-    shuffle=True
-)
-images, labels = next(sample_gen)
-predictions = model.predict(images)
-
-print("\n=== Sample Predictions ===")
-for i in range(len(images)):
-    true_idx = np.argmax(labels[i])
-    pred_idx = np.argmax(predictions[i])
-    true_label = class_names[true_idx]
-    pred_label = class_names[pred_idx]
-    confidence = predictions[i][pred_idx] * 100
-    correct = "✓" if true_idx == pred_idx else "✗"
-    
-    print(f"Image {i+1}: True={true_label}, Predicted={pred_label} ({confidence:.1f}%) {correct}")
-    
-    filename = f"{OUTPUT_DIR}/sample_{i+1}_{true_label}.png"
-    plt.figure(figsize=(4, 4))
-    plt.imshow(images[i])
-    plt.title(f"True: {true_label}\nPred: {pred_label} ({confidence:.1f}%)")
-    plt.axis('off')
-    plt.savefig(filename, bbox_inches='tight', dpi=150)
-    plt.close()
-
-print(f"\nSaved {len(images)} sample images to {OUTPUT_DIR}/")
+# === SAMPLE PREDICTIONS (skip for k-fold) ===
+if args.fold is None:
+    samples_dir = f"{BASE}/samples_{MODEL_TAG}"
+    os.makedirs(samples_dir, exist_ok=True)
+    sample_gen = test_datagen.flow_from_directory(
+        f"{DATASET_DIR}/train",
+        target_size=(IMG_SIZE, IMG_SIZE),
+        batch_size=6,
+        class_mode='categorical',
+        shuffle=True
+    )
+    images, labels = next(sample_gen)
+    preds = model.predict(images)
+    print("\n=== Sample Predictions ===")
+    for i in range(len(images)):
+        true_idx = np.argmax(labels[i])
+        pred_idx = np.argmax(preds[i])
+        true_label = class_names[true_idx]
+        pred_label = class_names[pred_idx]
+        confidence = preds[i][pred_idx] * 100
+        correct = "✓" if true_idx == pred_idx else "✗"
+        print(f"Image {i+1}: True={true_label}, Predicted={pred_label} ({confidence:.1f}%) {correct}")
+        filename = f"{samples_dir}/sample_{i+1}_{true_label}.png"
+        plt.figure(figsize=(4, 4))
+        plt.imshow(images[i])
+        plt.title(f"True: {true_label}\nPred: {pred_label} ({confidence:.1f}%)")
+        plt.axis('off')
+        plt.savefig(filename, bbox_inches='tight', dpi=150)
+        plt.close()
+    print(f"\nSaved {len(images)} sample images to {samples_dir}/")
 
 # Save final model
-model.save(f"{MODEL_TAG}.keras")
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+model.save(os.path.join(OUTPUT_DIR, f"{MODEL_TAG}.keras"))
 print(f"Saved: {MODEL_TAG}.keras")

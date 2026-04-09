@@ -1,28 +1,42 @@
-"""
-U-Net Multi-Class - BALANCED 1-YEAR DATA
-Uses OrganizedDatasetMultiClassBalanced (equal samples per class + 90/180/270 rotations).
-All outputs saved to balanced_multiclass_1year/
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
-import tensorflow as tf
-from tensorflow.keras.layers import (
-    Conv2D, MaxPooling2D, BatchNormalization, Dropout,
-    GlobalAveragePooling2D, Dense,
-)
-from tensorflow.keras.models import Model
-from tensorflow.keras import Input
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from sklearn.metrics import classification_report, confusion_matrix
+import argparse
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+import tensorflow as tf
+from sklearn.metrics import classification_report, confusion_matrix
+from tensorflow.keras import Input
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import (
+    BatchNormalization,
+    Conv2D,
+    Dense,
+    Dropout,
+    GlobalAveragePooling2D,
+    MaxPooling2D,
+)
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 # === CONFIG ===
-DATASET_DIR = "/scratch/gpfs/ALAINK/Suthi/OrganizedDatasetMultiClassBalanced"
-OUTPUT_DIR = "/scratch/gpfs/ALAINK/Suthi/balanced_multiclass_1year"
+BASE = "/scratch/gpfs/ALAINK/Suthi"
+parser = argparse.ArgumentParser()
+parser.add_argument("--fold", type=int, default=None, help="K-fold index 0..4 (None = standard train/test)")
+args = parser.parse_args()
+
+if args.fold is not None:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetMultiClassBalanced_kfold/fold_{args.fold}"
+    OUTPUT_DIR = f"{BASE}/balanced_multiclass_1year_kfold/unet_multi_balanced_1year_f{args.fold}"
+    VAL_SPLIT = "val"
+else:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetMultiClassBalanced"
+    OUTPUT_DIR = f"{BASE}/balanced_multiclass_1year"
+    VAL_SPLIT = "test"
+
 IMG_SIZE = 224
 BATCH_SIZE = 32
 EPOCHS = 80
@@ -54,7 +68,7 @@ train_generator = train_datagen.flow_from_directory(
     shuffle=True,
 )
 test_generator = test_datagen.flow_from_directory(
-    f"{DATASET_DIR}/test",
+    f"{DATASET_DIR}/{VAL_SPLIT}",
     target_size=(IMG_SIZE, IMG_SIZE),
     batch_size=BATCH_SIZE,
     class_mode="categorical",
@@ -123,6 +137,11 @@ history = model.fit(
 # === EVALUATE ===
 test_loss, test_acc = model.evaluate(test_generator, verbose=2)
 print(f"\nTest accuracy: {test_acc:.4f} ({test_acc*100:.2f}%)")
+
+if args.fold is not None:
+    import json
+    with open(os.path.join(OUTPUT_DIR, "kfold_result.json"), "w") as f:
+        json.dump({"fold": args.fold, "val_accuracy": float(test_acc)}, f)
 
 test_generator.reset()
 y_pred = np.argmax(model.predict(test_generator), axis=1)

@@ -1,7 +1,4 @@
-"""Grad-CAM Visualization for FirstCNN (DIY CNN) Binary Classifier - 5 YEARS DATA
-Loads the trained FirstCNN 5-year model and generates heatmaps.
-Run FirstCNN_5Years.py first to train the model!
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 import numpy as np

@@ -1,6 +1,4 @@
-"""AlexNet Binary Classification - 5 YEARS DATA
-Run create_balanced_binary_dataset_5years.py first!
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 from tensorflow import keras

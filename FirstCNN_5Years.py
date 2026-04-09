@@ -1,6 +1,4 @@
-"""FirstCNN (DIY CNN) Binary Classification - 5 YEARS DATA
-Uses same train/test split as AlexNet 5Years (OrganizedDatasetBalancedBinary_5Years)
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator

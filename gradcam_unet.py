@@ -1,7 +1,4 @@
-"""
-Grad-CAM Visualization for U-Net Binary Classifier
-Loads best_unet_1year.keras and generates heatmaps showing what the model focuses on.
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 import numpy as np

@@ -1,7 +1,4 @@
-"""ResNet50 Multi-Class Classification - 5 YEARS DATA
-Run create_multiclass_dataset_5years.py first!
-Classes: 0_safe, 1_crash, 2_crashes, 3plus_crashes
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 from tensorflow.keras.applications import ResNet50

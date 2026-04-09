@@ -1,7 +1,4 @@
-"""
-Grad-CAM Visualization for InceptionV3 Binary Classifier (1-year)
-Loads best_InceptionV3_1year.keras and generates heatmaps.
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 import numpy as np

@@ -1,7 +1,4 @@
-"""Grad-CAM Visualization for ResNet50 Binary Classifier
-Loads a trained model and generates heatmaps showing what the model focuses on.
-No retraining needed!
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 import numpy as np

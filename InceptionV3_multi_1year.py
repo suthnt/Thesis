@@ -1,8 +1,4 @@
-"""
-InceptionV3 Multi-Class - 1-YEAR DATA
-Classes: 0_safe, 1_crash, 2_crashes, 3plus_crashes
-Uses OrganizedDatasetMultiClass. Handles severe imbalance (~84% safe) with aggressive class weights.
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 from tensorflow.keras.applications import InceptionV3

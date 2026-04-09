@@ -1,6 +1,4 @@
-"""AlexNet Binary Classification - Training Only
-Run create_balanced_binary_dataset.py first to create the dataset!
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 from tensorflow import keras
@@ -28,7 +26,21 @@ if not gpus:
 print("===========================\n")
 
 # === CONFIGURATION ===
-DATASET_DIR = "/scratch/gpfs/ALAINK/Suthi/OrganizedDatasetBalancedBinary"
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--fold", type=int, default=None, help="K-fold index 0..4 (None = standard train/test)")
+args = parser.parse_args()
+
+BASE = "/scratch/gpfs/ALAINK/Suthi"
+if args.fold is not None:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary_kfold/fold_{args.fold}"
+    OUTPUT_DIR = f"{BASE}/binary_1year_kfold/AlexNet_bin_f{args.fold}"
+    VAL_SPLIT = "val"
+else:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary"
+    OUTPUT_DIR = BASE
+    VAL_SPLIT = "test"
+
 IMG_SIZE = 227  # AlexNet expects 227x227 images
 BATCH_SIZE = 32
 NUM_CLASSES = 2
@@ -60,7 +72,7 @@ train_generator = train_datagen.flow_from_directory(
 )
 
 test_generator = test_datagen.flow_from_directory(
-    f"{DATASET_DIR}/test",
+    f"{DATASET_DIR}/{VAL_SPLIT}",
     target_size=(IMG_SIZE, IMG_SIZE),
     batch_size=BATCH_SIZE,
     class_mode='categorical',
@@ -112,9 +124,10 @@ model.compile(
 )
 
 # === TRAINING ===
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 callbacks = [
     EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, verbose=1),
-    ModelCheckpoint('best_alexnet_model.keras', monitor='val_accuracy', save_best_only=True, verbose=1)
+    ModelCheckpoint(os.path.join(OUTPUT_DIR, 'best_alexnet_model.keras'), monitor='val_accuracy', save_best_only=True, verbose=1)
 ]
 
 history = model.fit(
@@ -130,6 +143,11 @@ print("\n=== Final Evaluation ===")
 test_loss, test_acc = model.evaluate(test_generator, verbose=2)
 print(f"Test loss: {test_loss:.4f}")
 print(f"Test accuracy: {test_acc:.4f}")
+
+if args.fold is not None:
+    import json
+    with open(os.path.join(OUTPUT_DIR, "kfold_result.json"), "w") as f:
+        json.dump({"fold": args.fold, "val_accuracy": float(test_acc)}, f)
 
 # === PLOTS ===
 # Training curves
@@ -150,7 +168,7 @@ plt.title('AlexNet - Accuracy')
 plt.xlabel('Epoch')
 
 plt.tight_layout()
-plt.savefig('training_curves_alex_bin.png', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(OUTPUT_DIR, 'training_curves_alex_bin.png'), dpi=300, bbox_inches='tight')
 print("Saved: training_curves_alex_bin.png")
 
 # Confusion matrix
@@ -171,35 +189,34 @@ plt.title('AlexNet Confusion Matrix')
 plt.xlabel('Predicted')
 plt.ylabel('Actual')
 plt.tight_layout()
-plt.savefig('confusion_matrix_alex_bin.png', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(OUTPUT_DIR, 'confusion_matrix_alex_bin.png'), dpi=300, bbox_inches='tight')
 print("Saved: confusion_matrix_alex_bin.png")
 
-# Sample predictions
-sample_gen = test_datagen.flow_from_directory(
-    f"{DATASET_DIR}/test",
-    target_size=(IMG_SIZE, IMG_SIZE),
-    batch_size=9,
-    class_mode='categorical',
-    shuffle=True
-)
-images, labels = next(sample_gen)
-preds = model.predict(images)
-
-plt.figure(figsize=(12, 12))
-for i in range(9):
-    true_label = class_names[np.argmax(labels[i])]
-    pred_label = class_names[np.argmax(preds[i])]
-    confidence = np.max(preds[i]) * 100
-    
-    plt.subplot(3, 3, i+1)
-    plt.axis("off")
-    plt.imshow(images[i])
-    color = 'green' if true_label == pred_label else 'red'
-    plt.title(f"True: {true_label}\nPred: {pred_label} ({confidence:.1f}%)", color=color)
-plt.tight_layout()
-plt.savefig('sample_predictions_alex_bin.png', dpi=300, bbox_inches='tight')
-print("Saved: sample_predictions_alex_bin.png")
+# Sample predictions (skip for k-fold)
+if args.fold is None:
+    sample_gen = test_datagen.flow_from_directory(
+        f"{DATASET_DIR}/{VAL_SPLIT}",
+        target_size=(IMG_SIZE, IMG_SIZE),
+        batch_size=9,
+        class_mode='categorical',
+        shuffle=True
+    )
+    images, labels = next(sample_gen)
+    preds = model.predict(images)
+    plt.figure(figsize=(12, 12))
+    for i in range(9):
+        true_label = class_names[np.argmax(labels[i])]
+        pred_label = class_names[np.argmax(preds[i])]
+        confidence = np.max(preds[i]) * 100
+        plt.subplot(3, 3, i+1)
+        plt.axis("off")
+        plt.imshow(images[i])
+        color = 'green' if true_label == pred_label else 'red'
+        plt.title(f"True: {true_label}\nPred: {pred_label} ({confidence:.1f}%)", color=color)
+    plt.tight_layout()
+    plt.savefig(os.path.join(OUTPUT_DIR, 'sample_predictions_alex_bin.png'), dpi=300, bbox_inches='tight')
+    print("Saved: sample_predictions_alex_bin.png")
 
 # Save model
-model.save("AlexNet_bin.keras")
+model.save(os.path.join(OUTPUT_DIR, "AlexNet_bin.keras"))
 print("Saved: AlexNet_bin.keras")

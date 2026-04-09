@@ -1,3 +1,5 @@
+# This code was written with the assistance of Claude (Anthropic).
+
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import numpy as np

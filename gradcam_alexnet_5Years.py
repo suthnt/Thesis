@@ -1,7 +1,4 @@
-"""Grad-CAM Visualization for AlexNet Binary Classifier - 5 YEARS DATA
-Loads the trained 5-year model and generates heatmaps.
-Run AlexNet_5Years.py first to train the model!
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
 import tensorflow as tf
 import numpy as np

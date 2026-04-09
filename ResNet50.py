@@ -1,19 +1,36 @@
-import tensorflow as tf
-from tensorflow.keras.applications import ResNet50
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense, GlobalAveragePooling2D, Dropout
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.utils.class_weight import compute_class_weight
+# This code was written with the assistance of Claude (Anthropic).
+
+import argparse
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+import tensorflow as tf
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
+from tensorflow.keras.applications import ResNet50
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import Dense, Dropout, GlobalAveragePooling2D
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 # ===================== CONFIGURATION =====================
-DATASET_DIR = "/scratch/gpfs/ALAINK/Suthi/OrganizedDatasetBalancedBinary"  # Update to your binary dataset path!
+BASE = "/scratch/gpfs/ALAINK/Suthi"
+parser = argparse.ArgumentParser()
+parser.add_argument("--fold", type=int, default=None, help="K-fold index 0..4 (None = standard train/test)")
+args = parser.parse_args()
+
+if args.fold is not None:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary_kfold/fold_{args.fold}"
+    OUTPUT_DIR = f"{BASE}/binary_1year_kfold/ResNet50_bin_f{args.fold}"
+    VAL_SPLIT = "val"
+else:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary"
+    OUTPUT_DIR = BASE
+    VAL_SPLIT = "test"
+
 IMG_SIZE = 224  # ResNet50 expects 224x224 images
 BATCH_SIZE = 32
 EPOCHS = 50
@@ -44,7 +61,7 @@ train_generator = train_datagen.flow_from_directory(
 )
 
 test_generator = test_datagen.flow_from_directory(
-    f"{DATASET_DIR}/test",
+    f"{DATASET_DIR}/{VAL_SPLIT}",
     target_size=(IMG_SIZE, IMG_SIZE),
     batch_size=BATCH_SIZE,
     class_mode='categorical',
@@ -87,9 +104,10 @@ model.compile(optimizer=Adam(learning_rate=0.0001),
               metrics=['accuracy'])
 
 # ===================== TRAINING =====================
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 callbacks = [
     EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True, verbose=1),
-    ModelCheckpoint('best_resnet50_model.keras', monitor='val_accuracy', save_best_only=True, verbose=1)
+    ModelCheckpoint(os.path.join(OUTPUT_DIR, 'best_resnet50_model.keras'), monitor='val_accuracy', save_best_only=True, verbose=1)
 ]
 
 history = model.fit(
@@ -105,8 +123,14 @@ test_loss, test_acc = model.evaluate(test_generator, verbose=2)
 print(f"Test loss: {test_loss:.4f}")
 print(f"Test accuracy: {test_acc:.4f}")
 
+if args.fold is not None:
+    import json
+    with open(os.path.join(OUTPUT_DIR, "kfold_result.json"), "w") as f:
+        json.dump({"fold": args.fold, "val_accuracy": float(test_acc)}, f)
+
 # Save test accuracy to file
-with open('resnet50_results.txt', 'w') as f:
+res_path = os.path.join(OUTPUT_DIR, 'resnet50_results.txt')
+with open(res_path, 'w') as f:
     f.write(f"Test Loss: {test_loss:.4f}\n")
     f.write(f"Test Accuracy: {test_acc:.4f}\n")
     f.write(f"Test Accuracy (%): {test_acc*100:.2f}%\n")
@@ -126,7 +150,7 @@ report = classification_report(y_true, y_pred, target_names=class_names)
 print(report)
 
 # Save classification report to file
-with open('resnet50_results.txt', 'a') as f:
+with open(res_path, 'a') as f:
     f.write("\n=== Classification Report ===\n")
     f.write(report)
 
@@ -140,7 +164,7 @@ plt.title('ResNet50 Confusion Matrix')
 plt.xlabel('Predicted')
 plt.ylabel('Actual')
 plt.tight_layout()
-plt.savefig('confusion_matrix_resnet50.png', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(OUTPUT_DIR, 'confusion_matrix_resnet50.png'), dpi=300, bbox_inches='tight')
 print("Saved: confusion_matrix_resnet50.png")
 
 # ===================== TRAINING CURVES =====================
@@ -161,9 +185,9 @@ plt.title('Accuracy')
 plt.xlabel('Epoch')
 
 plt.tight_layout()
-plt.savefig('training_curves_resnet50.png', dpi=300, bbox_inches='tight')
+plt.savefig(os.path.join(OUTPUT_DIR, 'training_curves_resnet50.png'), dpi=300, bbox_inches='tight')
 print("Saved: training_curves_resnet50.png")
 
 # Save model
-model.save(f"ResNet50_{NUM_CLASSES}class.keras")
+model.save(os.path.join(OUTPUT_DIR, f"ResNet50_{NUM_CLASSES}class.keras"))
 print(f"Saved: ResNet50_{NUM_CLASSES}class.keras")

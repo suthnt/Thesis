@@ -1,28 +1,45 @@
-"""
-U-Net - Binary classification on 1-year dataset (80/20 train/test).
-Same dataset and outputs as VGG16/AlexNet: OrganizedDatasetBalancedBinary.
-U-Net encoder + classification head (not pixel-wise segmentation).
-"""
+# This code was written with the assistance of Claude (Anthropic).
 
-import tensorflow as tf
-from tensorflow.keras.layers import (
-    Conv2D, MaxPooling2D, UpSampling2D, Concatenate,
-    BatchNormalization, Dropout, GlobalAveragePooling2D, Dense,
-)
-from tensorflow.keras.models import Model
-from tensorflow.keras import Input
-from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.preprocessing.image import ImageDataGenerator
-from sklearn.metrics import classification_report, confusion_matrix
-from sklearn.utils.class_weight import compute_class_weight
+import argparse
+import os
+
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
-import os
+import tensorflow as tf
+from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.utils.class_weight import compute_class_weight
+from tensorflow.keras import Input
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.layers import (
+    BatchNormalization,
+    Concatenate,
+    Conv2D,
+    Dense,
+    Dropout,
+    GlobalAveragePooling2D,
+    MaxPooling2D,
+    UpSampling2D,
+)
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
 
 # === CONFIG ===
-DATASET_DIR = "/scratch/gpfs/ALAINK/Suthi/OrganizedDatasetBalancedBinary"
+BASE = "/scratch/gpfs/ALAINK/Suthi"
+parser = argparse.ArgumentParser()
+parser.add_argument("--fold", type=int, default=None, help="K-fold index 0..4 (None = standard train/test)")
+args = parser.parse_args()
+
+if args.fold is not None:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary_kfold/fold_{args.fold}"
+    OUTPUT_DIR = f"{BASE}/binary_1year_kfold/unet_1year_f{args.fold}"
+    VAL_SPLIT = "val"
+else:
+    DATASET_DIR = f"{BASE}/OrganizedDatasetBalancedBinary"
+    OUTPUT_DIR = BASE
+    VAL_SPLIT = "test"
+
 IMG_SIZE = 224  # Same as VGG16 for consistency
 BATCH_SIZE = 32
 EPOCHS = 50
@@ -52,7 +69,7 @@ train_generator = train_datagen.flow_from_directory(
     shuffle=True,
 )
 test_generator = test_datagen.flow_from_directory(
-    f"{DATASET_DIR}/test",
+    f"{DATASET_DIR}/{VAL_SPLIT}",
     target_size=(IMG_SIZE, IMG_SIZE),
     batch_size=BATCH_SIZE,
     class_mode="categorical",
@@ -129,9 +146,10 @@ model.compile(
 model.summary()
 
 # === TRAIN ===
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 callbacks = [
     EarlyStopping(monitor="val_loss", patience=10, restore_best_weights=True, verbose=1),
-    ModelCheckpoint(f"best_{MODEL_TAG}.keras", monitor="val_accuracy", save_best_only=True, verbose=1),
+    ModelCheckpoint(os.path.join(OUTPUT_DIR, f"best_{MODEL_TAG}.keras"), monitor="val_accuracy", save_best_only=True, verbose=1),
 ]
 
 history = model.fit(
@@ -145,6 +163,11 @@ history = model.fit(
 # === EVALUATE ===
 test_loss, test_acc = model.evaluate(test_generator, verbose=2)
 print(f"\nTest accuracy: {test_acc:.4f} ({test_acc*100:.2f}%)")
+
+if args.fold is not None:
+    import json
+    with open(os.path.join(OUTPUT_DIR, "kfold_result.json"), "w") as f:
+        json.dump({"fold": args.fold, "val_accuracy": float(test_acc)}, f)
 
 test_generator.reset()
 y_pred = np.argmax(model.predict(test_generator), axis=1)
@@ -162,7 +185,7 @@ plt.title(f"{MODEL_TAG} Confusion Matrix")
 plt.xlabel("Predicted")
 plt.ylabel("Actual")
 plt.tight_layout()
-plt.savefig(f"confusion_matrix_{MODEL_TAG}.png", dpi=300, bbox_inches="tight")
+plt.savefig(os.path.join(OUTPUT_DIR, f"confusion_matrix_{MODEL_TAG}.png"), dpi=300, bbox_inches="tight")
 print(f"Saved: confusion_matrix_{MODEL_TAG}.png")
 
 # Training curves
@@ -178,8 +201,8 @@ plt.plot(history.history["val_accuracy"], label="Val")
 plt.legend()
 plt.title("Accuracy")
 plt.tight_layout()
-plt.savefig(f"training_curves_{MODEL_TAG}.png", dpi=300, bbox_inches="tight")
+plt.savefig(os.path.join(OUTPUT_DIR, f"training_curves_{MODEL_TAG}.png"), dpi=300, bbox_inches="tight")
 print(f"Saved: training_curves_{MODEL_TAG}.png")
 
-model.save(f"{MODEL_TAG}.keras")
+model.save(os.path.join(OUTPUT_DIR, f"{MODEL_TAG}.keras"))
 print(f"Saved: {MODEL_TAG}.keras")
